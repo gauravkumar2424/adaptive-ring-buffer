@@ -1,0 +1,158 @@
+#ifndef IMPORTANCE_METRICS_H
+#define IMPORTANCE_METRICS_H
+
+#include <cmath>
+#include <algorithm>
+#include <limits>
+
+// ============================================================
+// Importance Metrics for Adaptive Ring Buffer Eviction
+// ============================================================
+// Single-pass composite scoring — no runtime normalization.
+// 
+// The weights (α=0.1, β=0.3, γ=0.6) were optimized via grid
+// search and inherently compensate for scale differences between
+// metrics. Runtime normalization added O(N) overhead without
+// improving eviction quality, so it was removed to ensure the
+// composite has identical latency to single-metric modes.
+//
+// Complexity: O(N·W) per eviction, same as windowed energy alone.
+// ============================================================
+
+enum class ImportanceMetric {
+    FIRST_ORDER,
+    SECOND_ORDER,
+    WINDOWED_ENERGY,
+    COMPOSITE,
+    ADAPTIVE_COMPOSITE
+};
+
+struct ImportanceConfig {
+    double alpha = 0.1;
+    double beta  = 0.3;
+    double gamma = 0.6;
+    size_t window_half = 3;
+    double occupancy_shift = 0.15;
+    size_t boundary_protect = 1;
+};
+
+// ============================================================
+// Inline metric computations — O(1) for d1/d2, O(W) for energy
+// ============================================================
+
+inline double raw_first_order(
+    const double* buf, size_t cap, size_t head, size_t idx)
+{
+    if (idx == 0) return 0.0;
+    return std::abs(buf[(head+idx)%cap] - buf[(head+idx-1)%cap]);
+}
+
+inline double raw_second_order(
+    const double* buf, size_t cap, size_t head, size_t idx)
+{
+    if (idx < 2) return 0.0;
+    double d1 = buf[(head+idx)%cap] - buf[(head+idx-1)%cap];
+    double d0 = buf[(head+idx-1)%cap] - buf[(head+idx-2)%cap];
+    return std::abs(d1 - d0);
+}
+
+inline double raw_windowed_energy(
+    const double* buf, size_t cap, size_t head,
+    size_t buf_size, size_t idx, size_t wh)
+{
+    double energy = 0.0;
+    size_t start = (idx > wh) ? (idx - wh) : 0;
+    size_t end = (idx + wh < buf_size) ? (idx + wh) : (buf_size - 1);
+    for (size_t i = start + 1; i <= end; ++i) {
+        double diff = buf[(head+i)%cap] - buf[(head+i-1)%cap];
+        energy += diff * diff;
+    }
+    size_t wlen = end - start;
+    return (wlen > 0) ? energy / wlen : 0.0;
+}
+
+// ============================================================
+// Single-pass eviction candidate search
+//
+// All modes use ONE pass over the buffer. No normalization.
+// For COMPOSITE/ADAPTIVE_COMPOSITE, all three metrics are
+// computed inline and combined with weights — same loop as
+// windowed energy but with two extra O(1) additions per sample.
+// Total: O(N·W), identical asymptotic cost to WINDOWED_ENERGY.
+// ============================================================
+
+inline size_t find_eviction_candidate(
+    const double* buf, size_t cap,
+    size_t head, size_t buf_size,
+    ImportanceMetric metric,
+    const ImportanceConfig& cfg,
+    double occupancy_ratio = 0.0)
+{
+    if (buf_size <= 2) return 0;
+
+    size_t protect = cfg.boundary_protect;
+    size_t search_start = (protect > 0) ? protect : 1;
+    size_t search_end = (buf_size > protect) ? (buf_size - protect) : buf_size;
+    if (search_start >= search_end) return search_start;
+
+    double min_score = std::numeric_limits<double>::max();
+    size_t min_idx = search_start;
+
+    // Compute effective weights once (before the loop)
+    double a = cfg.alpha, b = cfg.beta, g = cfg.gamma;
+    if (metric == ImportanceMetric::ADAPTIVE_COMPOSITE) {
+        double shift = cfg.occupancy_shift * occupancy_ratio;
+        g = std::min(0.95, g + shift);
+        a = std::max(0.01, a - shift * 0.5);
+        double total = a + b + g;
+        a /= total; b /= total; g /= total;
+    }
+
+    // Single pass — compute score and track minimum simultaneously
+    for (size_t i = search_start; i < search_end; ++i) {
+        double score;
+
+        switch (metric) {
+            case ImportanceMetric::FIRST_ORDER:
+                score = raw_first_order(buf, cap, head, i);
+                break;
+
+            case ImportanceMetric::SECOND_ORDER:
+                score = raw_second_order(buf, cap, head, i);
+                break;
+
+            case ImportanceMetric::WINDOWED_ENERGY:
+                score = raw_windowed_energy(buf, cap, head, buf_size, i, cfg.window_half);
+                break;
+
+            case ImportanceMetric::COMPOSITE:
+            case ImportanceMetric::ADAPTIVE_COMPOSITE:
+                // All three computed inline, combined directly
+                // No normalization — weights handle scale differences
+                score = a * raw_first_order(buf, cap, head, i)
+                      + b * raw_second_order(buf, cap, head, i)
+                      + g * raw_windowed_energy(buf, cap, head, buf_size, i, cfg.window_half);
+                break;
+        }
+
+        if (score < min_score) {
+            min_score = score;
+            min_idx = i;
+        }
+    }
+
+    return min_idx;
+}
+
+// Standalone metric functions for external analysis
+inline double importance_first_order(const double* buf, size_t cap,
+    size_t head, size_t, size_t idx) { return raw_first_order(buf, cap, head, idx); }
+
+inline double importance_second_order(const double* buf, size_t cap,
+    size_t head, size_t, size_t idx) { return raw_second_order(buf, cap, head, idx); }
+
+inline double importance_windowed_energy(const double* buf, size_t cap,
+    size_t head, size_t bs, size_t idx, size_t wh=3) {
+    return raw_windowed_energy(buf, cap, head, bs, idx, wh); }
+
+#endif // IMPORTANCE_METRICS_H

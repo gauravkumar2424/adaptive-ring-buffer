@@ -1,0 +1,9 @@
+nohup: ignoring input
+=== Adaptive Ring Buffer — Experiment Sweep ===
+Target: DATE 2027
+
+Estimated experiments: 40800
+Two-pass: online first, offline matched to same drop count
+
+  Progress: 3400/40800 (7062s remaining)
+  Progress: 6800/40800 (6670s remaining)

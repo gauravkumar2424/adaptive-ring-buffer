@@ -1,0 +1,62 @@
+nohup: ignoring input
+cd ../build && ./stress_test
+=== HIGH-COMPRESSION STRESS TEST ===
+Overload ratios: 2-20x, Buffer sizes: 32-512
+
+  Loaded ECG 100: 2000 samples, 8 R-peaks
+  Loaded ECG 105: 2000 samples, 8 R-peaks
+  Loaded ECG 108: 2000 samples, 7 R-peaks
+  Loaded ECG 201: 2000 samples, 9 R-peaks
+  Loaded ECG 228: 2000 samples, 8 R-peaks
+  Loaded CWRU Normal baseline: 2000 samples
+  Loaded CWRU Inner race fault: 2000 samples
+  Loaded CWRU Ball fault: 2000 samples
+Loaded 8 signals
+
+Running 9800 experiments...
+  1400/9800 (3130s remaining)
+  2800/9800 (2613s remaining)
+  4200/9800 (2100s remaining)
+  5600/9800 (1582s remaining)
+  7000/9800 (1061s remaining)
+  8400/9800 (536s remaining)
+  9800/9800 (0s remaining)
+
+=== DEGRADATION CURVES (Mean SNR by Overload) ===
+
+--- SNR (dB) by Overload Ratio ---
+Mode                        2x      3x      5x      8x     10x     15x     20x
+------------------------------------------------------------------------------
+DROP                      26.4    22.4    17.5    13.9    12.1     9.2     7.6
+IMP_COMPOSITE             27.5    23.7    20.0    17.2    15.9    13.5    12.1
+IMP_INTERP_COMPOSITE      39.0    32.3    26.9    23.3    21.8    19.8    18.7
+IMP_INTERP_ERROR          39.0    32.4    26.9    23.3    21.8    19.8    18.7
+LTTB_OFFLINE              30.0    26.7    22.9    19.9    18.6    16.5    15.4
+RANDOM_DROP               22.1    17.0    12.8     9.9     8.6     6.9     5.9
+RDP_OFFLINE               36.7    34.0    28.4    24.7    23.3    21.2    20.0
+
+--- R-peak F1 by Overload Ratio (ECG only) ---
+Mode                        2x      3x      5x      8x     10x     15x     20x
+------------------------------------------------------------------------------
+DROP                     0.753   0.754   0.756   0.755   0.750   0.715   0.656
+IMP_COMPOSITE            0.749   0.756   0.756   0.760   0.761   0.766   0.766
+IMP_INTERP_COMPOSITE     0.747   0.747   0.747   0.749   0.749   0.755   0.759
+IMP_INTERP_ERROR         0.747   0.747   0.747   0.748   0.749   0.756   0.759
+LTTB_OFFLINE             0.747   0.748   0.751   0.755   0.752   0.753   0.757
+RANDOM_DROP              0.751   0.751   0.739   0.725   0.689   0.641   0.587
+RDP_OFFLINE              0.747   0.747   0.747   0.747   0.747   0.751   0.756
+
+--- Spectral Correlation by Overload (Vibration only) ---
+Mode                        2x      3x      5x      8x     10x     15x     20x
+------------------------------------------------------------------------------
+DROP                    0.9478  0.8197  0.5637  0.4942  0.4634  0.3504  0.3122
+IMP_COMPOSITE           0.9816  0.9413  0.8305  0.7204  0.6691  0.5683  0.5197
+IMP_INTERP_COMPOSITE    0.9975  0.9879  0.9526  0.8832  0.8337  0.7656  0.7188
+IMP_INTERP_ERROR        0.9974  0.9877  0.9528  0.8821  0.8285  0.7686  0.7178
+LTTB_OFFLINE            0.9727  0.9047  0.6974  0.5719  0.5069  0.4269  0.3941
+RANDOM_DROP             0.9209  0.8010  0.6138  0.5015  0.5143  0.4308  0.3822
+RDP_OFFLINE             0.9964  0.9823  0.9332  0.8377  0.7840  0.6958  0.6242
+
+Total experiments: 9800
+Total time: 3826.6s (63.8 min)
+Results: results/stress_test_results.csv

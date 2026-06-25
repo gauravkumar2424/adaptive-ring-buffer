@@ -1,0 +1,23 @@
+nohup: ignoring input
+=== Adaptive Ring Buffer — Experiment Sweep ===
+Target: DATE 2027
+
+Estimated experiments: 25500
+Two-pass: online first, offline matched to same drop count
+
+  Progress: 3400/25500 (4164s remaining)
+  Progress: 6800/25500 (3668s remaining)
+  Progress: 10200/25500 (3156s remaining)
+  Progress: 13600/25500 (2490s remaining)
+  Progress: 17000/25500 (1849s remaining)
+  Progress: 20400/25500 (1187s remaining)
+  Progress: 23800/25500 (418s remaining)
+  Loaded 5000 ECG samples from ../data/mit-bih/ecg_signal.txt
+
+Running ECG experiments...
+  Progress: 27200/25500 (-440s remaining)
+
+=== SWEEP COMPLETE ===
+Total experiments: 27625
+Total time: 7189.9 seconds (119.8 minutes)
+Results: results/sweep_results.csv

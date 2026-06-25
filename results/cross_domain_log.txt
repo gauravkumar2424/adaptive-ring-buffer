@@ -1,0 +1,73 @@
+nohup: ignoring input
+=== Cross-Domain Signal Validation (N5) ===
+
+Loading signals...
+  Loaded ECG 100: 2000 samples, 8 R-peaks
+  Loaded ECG 105: 2000 samples, 8 R-peaks
+  Loaded ECG 108: 2000 samples, 7 R-peaks
+  Loaded ECG 201: 2000 samples, 9 R-peaks
+  Loaded ECG 228: 2000 samples, 8 R-peaks
+  Loaded CWRU Normal baseline: 2000 samples
+  Loaded CWRU Inner race fault: 2000 samples
+  Loaded CWRU Ball fault: 2000 samples
+Loaded 8 signals total
+
+Running 11200 experiments...
+  700/11200 (3521s remaining)
+  1400/11200 (3854s remaining)
+  2100/11200 (3398s remaining)
+  2800/11200 (3303s remaining)
+  3500/11200 (2949s remaining)
+  4200/11200 (2769s remaining)
+  4900/11200 (2443s remaining)
+  5600/11200 (2221s remaining)
+  6300/11200 (1908s remaining)
+  7000/11200 (1662s remaining)
+  7700/11200 (1365s remaining)
+  8400/11200 (1107s remaining)
+  9100/11200 (820s remaining)
+  9800/11200 (553s remaining)
+  10500/11200 (274s remaining)
+  11200/11200 (0s remaining)
+
+=== RESULTS SUMMARY ===
+
+--- ECG (MIT-BIH) ---
+Mode                     SNR(dB)   R-peak F1       n
+----------------------------------------------------
+RDP_OFFLINE                41.15      0.7473     500
+IMP_INTERP_ERROR           41.12      0.7474     500 <<<
+IMP_INTERP_COMPOSITE       41.08      0.7473     500 <<<
+LTTB_OFFLINE               35.18      0.7503     500
+ADAPTIVE                   32.67      0.7540     500
+IMP_ADAPTIVE               32.40      0.7512     500
+IMP_COMPOSITE              32.02      0.7543     500
+IMP_FIRST_ORDER            31.87      0.7515     500
+LEGACY_IMPORTANCE          31.84      0.7520     500
+DROP_LOW_VARIANCE          31.45      0.7520     500
+IMP_WINDOWED_ENERGY        31.00      0.7538     500
+DROP                       29.76      0.7541     500
+DROP_MIDDLE                29.69      0.7544     500
+RANDOM_DROP                23.31      0.7449     500
+
+--- Vibration (CWRU Bearing) ---
+Mode                     SNR(dB)  Spectral r       n
+----------------------------------------------------
+RDP_OFFLINE                16.54      0.9628     300
+IMP_INTERP_COMPOSITE       14.81      0.9786     300 <<<
+IMP_INTERP_ERROR           14.75      0.9786     300 <<<
+LTTB_OFFLINE                9.93      0.8208     300
+ADAPTIVE                    7.87      0.7980     300
+IMP_ADAPTIVE                7.86      0.9140     300
+IMP_COMPOSITE               7.31      0.9113     300
+IMP_WINDOWED_ENERGY         6.99      0.9212     300
+DROP_LOW_VARIANCE           6.97      0.9069     300
+IMP_FIRST_ORDER             6.21      0.9255     300
+LEGACY_IMPORTANCE           6.17      0.9260     300
+DROP_MIDDLE                 5.62      0.8119     300
+DROP                        5.62      0.7256     300
+RANDOM_DROP                 3.53      0.7671     300
+
+Total experiments: 11200
+Total time: 4430.6s (73.8 min)
+Results: results/cross_domain_results.csv

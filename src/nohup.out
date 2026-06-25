@@ -1,0 +1,7 @@
+novelty_eval.cpp: In function ‘std::vector<int> offline_rdp(const std::vector<double>&, int)’:
+novelty_eval.cpp:276:9: warning: this ‘if’ clause does not guard... [-Wmisleading-indentation]
+  276 |         if (p >= 0) next_kept[p] = s; if (s >= 0 && s < n) prev_kept[s] = p;
+      |         ^~
+novelty_eval.cpp:276:39: note: ...this statement, but the latter is misleadingly indented as if it were guarded by the ‘if’
+  276 |         if (p >= 0) next_kept[p] = s; if (s >= 0 && s < n) prev_kept[s] = p;
+      |                                       ^~

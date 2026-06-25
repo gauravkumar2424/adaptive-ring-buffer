@@ -1,0 +1,94 @@
+nohup: ignoring input
+============================================================
+  NOVELTY EVALUATION
+  External Baselines (SDT, PLA, LTC) + Spectral Mode
+============================================================
+
+  Loaded ECG 100: 2000 samples, 8 R-peaks
+  Loaded ECG 105: 2000 samples, 8 R-peaks
+  Loaded ECG 108: 2000 samples, 7 R-peaks
+  Loaded ECG 201: 2000 samples, 9 R-peaks
+  Loaded ECG 228: 2000 samples, 8 R-peaks
+  Loaded CWRU Normal baseline: 2000 samples
+  Loaded CWRU Inner race fault: 2000 samples
+  Loaded CWRU Ball fault: 2000 samples
+Loaded 8 signals
+
+Running 3840 online + 4800 offline experiments...
+  1800 done (1496s remaining)
+  3600 done (1160s remaining)
+  5400 done (767s remaining)
+  7200 done (335s remaining)
+
+============================================================
+  RESULTS SUMMARY
+============================================================
+
+--- ALL (SNR dB) ---
+Mode                       n      Mean    StdDev
+------------------------------------------------
+RDP_OFFLINE              960     28.72     15.42
+IMP_INTERP_SPECTRAL      960     28.01     15.10 <<<
+IMP_INTERP_ERROR         960     27.93     15.14 <<<
+IMP_INTERP_COMPOSITE     960     27.92     15.09 <<<
+PLA_MATCHED              960     27.38     14.67 [EXT]
+LTC_MATCHED              960     27.32     14.75 [EXT]
+SDT_MATCHED              960     27.32     14.75 [EXT]
+LTTB_OFFLINE             960     23.04     13.64
+DROP                     960     17.15     12.62
+
+--- ecg (SNR dB) ---
+Mode                       n      Mean    StdDev
+------------------------------------------------
+RDP_OFFLINE              600     38.01      9.50
+IMP_INTERP_SPECTRAL      600     37.81      7.54 <<<
+IMP_INTERP_ERROR         600     37.78      7.51 <<<
+IMP_INTERP_COMPOSITE     600     37.73      7.48 <<<
+PLA_MATCHED              600     36.22      8.89 [EXT]
+LTC_MATCHED              600     36.20      9.02 [EXT]
+SDT_MATCHED              600     36.20      9.02 [EXT]
+LTTB_OFFLINE             600     32.23      5.75
+DROP                     600     25.18      7.63
+
+--- ecg (R-peak F1) ---
+Mode                       n      Mean
+--------------------------------------
+LTC_MATCHED              600    0.7516 [EXT]
+SDT_MATCHED              600    0.7516 [EXT]
+LTTB_OFFLINE             600    0.7508
+DROP                     600    0.7505
+PLA_MATCHED              600    0.7501 [EXT]
+IMP_INTERP_COMPOSITE     600    0.7491 <<<
+IMP_INTERP_ERROR         600    0.7490 <<<
+IMP_INTERP_SPECTRAL      600    0.7486 <<<
+RDP_OFFLINE              600    0.7477
+
+--- vibration (SNR dB) ---
+Mode                       n      Mean    StdDev
+------------------------------------------------
+RDP_OFFLINE              360     13.22      9.97
+PLA_MATCHED              360     12.66      9.74 [EXT]
+LTC_MATCHED              360     12.52      9.70 [EXT]
+SDT_MATCHED              360     12.52      9.70 [EXT]
+IMP_INTERP_SPECTRAL      360     11.67      9.26 <<<
+IMP_INTERP_COMPOSITE     360     11.57      9.24 <<<
+IMP_INTERP_ERROR         360     11.51      9.27 <<<
+LTTB_OFFLINE             360      7.73      8.08
+DROP                     360      3.75      6.36
+
+--- vibration (Spectral Correlation) ---
+Mode                       n      Mean    StdDev
+------------------------------------------------
+IMP_INTERP_SPECTRAL      360    0.9295    0.1227 <<<
+IMP_INTERP_ERROR         360    0.9288    0.1231 <<<
+IMP_INTERP_COMPOSITE     360    0.9274    0.1255 <<<
+PLA_MATCHED              360    0.8934    0.1476 [EXT]
+LTC_MATCHED              360    0.8922    0.1470 [EXT]
+SDT_MATCHED              360    0.8922    0.1470 [EXT]
+RDP_OFFLINE              360    0.8918    0.1611
+LTTB_OFFLINE             360    0.7050    0.3257
+DROP                     330    0.6411    0.3293
+
+Total experiments: 8640
+Total time: 2052.6s (34.2 min)
+Results: results/novelty_eval_results.csv

@@ -1,0 +1,25 @@
+CXX = g++
+CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -pthread
+BUILD_DIR = ../build
+RESULTS_DIR = ../results
+
+# N2 Validation Benchmark (V2 architecture)
+n2: $(BUILD_DIR)/n2_validate
+
+$(BUILD_DIR)/n2_validate: n2_validate.cpp ring_buffer_v2.h
+	@mkdir -p $(BUILD_DIR) $(RESULTS_DIR)
+	$(CXX) $(CXXFLAGS) -o $@ n2_validate.cpp
+	@echo "Built: $@"
+
+# Quick run (~2–5 minutes)
+n2-quick: n2
+	cd $(BUILD_DIR) && ./n2_validate --quick --results ../results
+
+# Full run (~30–60 minutes)
+n2-full: n2
+	cd $(BUILD_DIR) && ./n2_validate --results ../results
+
+clean:
+	rm -f $(BUILD_DIR)/n2_validate
+
+.PHONY: n2 n2-quick n2-full clean

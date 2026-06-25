@@ -1,0 +1,267 @@
+#ifndef RING_BUFFER_H
+#define RING_BUFFER_H
+
+#include <vector>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+#include <random>
+#include <limits>
+#include <cmath>
+#include "importance_metrics.h"
+
+enum class BufferMode {
+    // Original modes (kept for baseline comparison)
+    DROP,
+    WAIT,
+    TIMED_WAIT,
+    ADAPTIVE_TIMED_WAIT,
+    ADAPTIVE_IMPORTANCE,       // Original first-order only
+    RANDOM_DROP,
+    DROP_MIDDLE,
+    DROP_LOW_VARIANCE,
+
+    // NEW: Multi-order importance modes (Novelty 2)
+    IMPORTANCE_FIRST_ORDER,    // Isolated first-order (ablation)
+    IMPORTANCE_SECOND_ORDER,   // Isolated second-order (ablation)
+    IMPORTANCE_WINDOWED_ENERGY,// Isolated windowed energy (ablation)
+    IMPORTANCE_COMPOSITE,      // Fixed-weight combination (Novelty 2)
+    IMPORTANCE_ADAPTIVE        // Occupancy-adaptive weights (Novelty 6)
+};
+
+// Sample with its original timestamp/index preserved
+struct IndexedSample {
+    double value;
+    int original_index;
+};
+
+template <typename T>
+class RingBuffer {
+public:
+    RingBuffer(size_t capacity, BufferMode mode = BufferMode::DROP,
+               std::chrono::milliseconds timeout = std::chrono::milliseconds(20),
+               ImportanceConfig imp_config = ImportanceConfig())
+        : capacity_(capacity),
+          mode_(mode),
+          timeout_(timeout),
+          imp_config_(imp_config),
+          head_(0),
+          tail_(0),
+          size_(0),
+          drop_count_(0),
+          max_producer_wait_ms_(0.0) {
+        buffer_.resize(capacity_);
+        indices_.resize(capacity_);
+        values_cache_.resize(capacity_);
+    }
+
+    // Push with original index tracking
+    void push(const T& value, int original_index = -1) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        auto start = std::chrono::high_resolution_clock::now();
+
+        while (size_ == capacity_) {
+            if (mode_ == BufferMode::WAIT) {
+                cond_full_.wait(lock);
+            } else if (mode_ == BufferMode::TIMED_WAIT || mode_ == BufferMode::ADAPTIVE_TIMED_WAIT) {
+                auto effective_timeout = (mode_ == BufferMode::ADAPTIVE_TIMED_WAIT)
+                    ? std::chrono::milliseconds(static_cast<long>(
+                        timeout_.count() * (1.0 - static_cast<double>(size_) / capacity_)))
+                    : timeout_;
+
+                if (!cond_full_.wait_for(lock, effective_timeout,
+                        [this] { return size_ < capacity_; })) {
+                    performEviction();
+                }
+            } else {
+                performEviction();
+            }
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        double wait_ms = std::chrono::duration<double, std::milli>(end - start).count();
+        if (wait_ms > max_producer_wait_ms_) {
+            max_producer_wait_ms_ = wait_ms;
+        }
+
+        buffer_[tail_] = value;
+        indices_[tail_] = original_index;
+        tail_ = (tail_ + 1) % capacity_;
+        ++size_;
+
+        cond_empty_.notify_one();
+    }
+
+    // Pop returns value and its original index
+    IndexedSample pop_indexed() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cond_empty_.wait(lock, [this] { return size_ > 0 || !running_; });
+
+        if (size_ == 0) {
+            throw std::runtime_error("Buffer is empty and production finished");
+        }
+
+        IndexedSample result;
+        result.value = buffer_[head_];
+        result.original_index = indices_[head_];
+        head_ = (head_ + 1) % capacity_;
+        --size_;
+
+        cond_full_.notify_one();
+        return result;
+    }
+
+    T pop() {
+        auto sample = pop_indexed();
+        return sample.value;
+    }
+
+    void finish() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        running_ = false;
+        cond_empty_.notify_all();
+    }
+
+    size_t getDropCount() const { return drop_count_; }
+    double getMaxProducerWaitMs() const { return max_producer_wait_ms_; }
+    size_t getSize() const { return size_; }
+    size_t getCapacity() const { return capacity_; }
+
+private:
+    size_t capacity_;
+    BufferMode mode_;
+    std::chrono::milliseconds timeout_;
+    ImportanceConfig imp_config_;
+
+    std::vector<T> buffer_;
+    std::vector<int> indices_;       // Original index of each sample
+    std::vector<double> values_cache_; // For importance metric computation
+    size_t head_;
+    size_t tail_;
+    size_t size_;
+    bool running_ = true;
+
+    mutable std::mutex mutex_;
+    std::condition_variable cond_full_;
+    std::condition_variable cond_empty_;
+
+    size_t drop_count_ = 0;
+    double max_producer_wait_ms_ = 0.0;
+
+    ImportanceMetric getImportanceMetric() const {
+        switch (mode_) {
+            case BufferMode::IMPORTANCE_FIRST_ORDER:
+                return ImportanceMetric::FIRST_ORDER;
+            case BufferMode::IMPORTANCE_SECOND_ORDER:
+                return ImportanceMetric::SECOND_ORDER;
+            case BufferMode::IMPORTANCE_WINDOWED_ENERGY:
+                return ImportanceMetric::WINDOWED_ENERGY;
+            case BufferMode::IMPORTANCE_COMPOSITE:
+                return ImportanceMetric::COMPOSITE;
+            case BufferMode::IMPORTANCE_ADAPTIVE:
+                return ImportanceMetric::ADAPTIVE_COMPOSITE;
+            default:
+                return ImportanceMetric::FIRST_ORDER;
+        }
+    }
+
+    bool isNewImportanceMode() const {
+        return mode_ == BufferMode::IMPORTANCE_FIRST_ORDER ||
+               mode_ == BufferMode::IMPORTANCE_SECOND_ORDER ||
+               mode_ == BufferMode::IMPORTANCE_WINDOWED_ENERGY ||
+               mode_ == BufferMode::IMPORTANCE_COMPOSITE ||
+               mode_ == BufferMode::IMPORTANCE_ADAPTIVE;
+    }
+
+    // Build a contiguous array of values for importance computation
+    void buildValuesCache() {
+        for (size_t i = 0; i < size_; ++i) {
+            values_cache_[i] = static_cast<double>(buffer_[(head_ + i) % capacity_]);
+        }
+    }
+
+    void performEviction() {
+        if (size_ == 0) return;
+
+        size_t idx_to_remove = 0;
+
+        // ---- NEW: Multi-order importance eviction ----
+        if (isNewImportanceMode()) {
+            buildValuesCache();
+            double occupancy_ratio = static_cast<double>(size_) / capacity_;
+            // Use contiguous cache starting at index 0
+            idx_to_remove = find_eviction_candidate(
+                values_cache_.data(),
+                size_,     // capacity = size for contiguous array
+                0,         // head = 0 for contiguous array
+                size_,
+                getImportanceMetric(),
+                imp_config_,
+                occupancy_ratio
+            );
+        } else {
+            // ---- Original eviction logic (kept for baselines) ----
+            switch (mode_) {
+                case BufferMode::DROP:
+                case BufferMode::ADAPTIVE_TIMED_WAIT:
+                    idx_to_remove = 0;
+                    break;
+
+                case BufferMode::RANDOM_DROP:
+                    idx_to_remove = rand() % size_;
+                    break;
+
+                case BufferMode::DROP_MIDDLE:
+                    idx_to_remove = size_ / 2;
+                    break;
+
+                case BufferMode::DROP_LOW_VARIANCE: {
+                    double min_var = std::numeric_limits<double>::max();
+                    for (size_t i = 1; i < size_ - 1; ++i) {
+                        double v1 = buffer_[(head_ + i - 1) % capacity_];
+                        double v2 = buffer_[(head_ + i) % capacity_];
+                        double v3 = buffer_[(head_ + i + 1) % capacity_];
+                        double mean = (v1 + v2 + v3) / 3.0;
+                        double var = ((v1-mean)*(v1-mean) + (v2-mean)*(v2-mean) + (v3-mean)*(v3-mean)) / 3.0;
+                        if (var < min_var) {
+                            min_var = var;
+                            idx_to_remove = i;
+                        }
+                    }
+                    break;
+                }
+
+                case BufferMode::ADAPTIVE_IMPORTANCE: {
+                    double min_deriv = std::numeric_limits<double>::max();
+                    for (size_t i = 1; i < size_; ++i) {
+                        double deriv = std::abs(
+                            buffer_[(head_ + i) % capacity_] -
+                            buffer_[(head_ + i - 1) % capacity_]);
+                        if (deriv < min_deriv) {
+                            min_deriv = deriv;
+                            idx_to_remove = i;
+                        }
+                    }
+                    break;
+                }
+
+                default:
+                    idx_to_remove = 0;
+                    break;
+            }
+        }
+
+        // Remove the selected sample (shift elements and indices left)
+        for (size_t i = idx_to_remove; i < size_ - 1; ++i) {
+            size_t src = (head_ + i + 1) % capacity_;
+            size_t dst = (head_ + i) % capacity_;
+            buffer_[dst] = buffer_[src];
+            indices_[dst] = indices_[src];
+        }
+        tail_ = (head_ + size_ - 1) % capacity_;
+        --size_;
+        ++drop_count_;
+    }
+};
+
+#endif // RING_BUFFER_H

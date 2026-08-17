@@ -36,6 +36,7 @@ struct ImportanceConfig {
     double occupancy_shift = 0.15;
     size_t boundary_protect = 1;
     CombinationRule combination = CombinationRule::WEIGHTED_LINEAR;
+    double span_beta = 0.0;        // === SPAN ADDITION === 0=interp error, 1=V-W area
     double lookahead_alpha = 0.5;  // === LOOKAHEAD ADDITION === cascade penalty weight
 };
 

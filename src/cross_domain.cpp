@@ -360,6 +360,7 @@ int main(int argc, char* argv[]) {
         {"IMP_ADAPTIVE",      BufferMode::IMPORTANCE_ADAPTIVE},
         {"IMP_INTERP_ERROR",     BufferMode::IMPORTANCE_INTERP_ERROR},
         {"IMP_INTERP_COMPOSITE", BufferMode::IMPORTANCE_INTERP_COMPOSITE},
+        {"IMP_VW_AREA",          BufferMode::IMPORTANCE_VW_AREA},
     };
     vector<string> offline_methods = {"RDP_OFFLINE", "LTTB_OFFLINE"};
 

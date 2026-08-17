@@ -1,0 +1,11 @@
+build/
+data/cwru-bearing/raw/
+data/cwru-bearing/*.txt
+data/mitbih/
+*.o
+*.elf
+*.bin
+__pycache__/
+*.pyc
+data/uci-har/
+data/**/*.zip

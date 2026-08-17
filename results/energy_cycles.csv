@@ -1,0 +1,5 @@
+mode,workload,g_cyc_x1000,cycles_per_iteration
+1,heap,7164068,7164.068
+2,cached_scan,64402041,64402.041
+3,sdt,5728843,5728.843
+4,signal_only,5576342,5576.342

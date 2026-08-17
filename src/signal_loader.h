@@ -62,7 +62,7 @@ inline std::vector<RealSignal> load_all_real_signals(const std::string& data_dir
     std::vector<RealSignal> signals;
 
     // MIT-BIH ECG records
-    std::vector<std::string> ecg_ids = {"100", "105", "108", "201", "228"};
+    std::vector<std::string> ecg_ids = {"100", "101", "105", "106", "108", "109", "112", "115", "118", "119", "122", "201", "205", "212", "215", "228"};
     for (const auto& id : ecg_ids) {
         std::string sig_path = data_dir + "/mit-bih/ecg_" + id + ".txt";
         std::string rpeak_path = data_dir + "/mit-bih/rpeak_" + id + ".txt";

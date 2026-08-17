@@ -90,7 +90,21 @@ enum class BufferMode {
     // cascade_penalty = max(0, ie(i) - min(new_ie(p), new_ie(s)))
     // score(i) = ie(i) + α * cascade_penalty
     // Still O(N) — constant factor overhead over INTERP_ERROR.
-    IMPORTANCE_INTERP_LOOKAHEAD   // O(N) — error with cascade penalty
+    IMPORTANCE_INTERP_LOOKAHEAD,  // O(N) — error with cascade penalty
+
+    // === V-W BASELINE ADDITION ===
+    // Classical Visvalingam-Whyatt effective-area importance.
+    // Included as a baseline: V-W (1993) is the standard heap-based
+    // line-simplification method; we compare its triangle-area score
+    // against direct interpolation error on 1-D sensor streams.
+    IMPORTANCE_VW_AREA,            // O(N) — V-W triangle area
+
+    // === SPAN-WEIGHTED FAMILY (S5) ===
+    // score(i) = |x_i - xhat_i| * (t_s - t_p)^beta
+    // Since V-W area == 0.5 * span * interpolation error exactly,
+    // beta=0 reduces to IMPORTANCE_INTERP_ERROR and beta=1 to
+    // IMPORTANCE_VW_AREA. Interpolates and extrapolates between them.
+    IMPORTANCE_INTERP_SPAN        // O(N) - ie * span^beta
 };
 
 struct IndexedSample {
@@ -353,6 +367,53 @@ private:
     }
 
     // ========================================================
+    // === V-W BASELINE ADDITION ===
+    // Visvalingam-Whyatt effective area — O(1)
+    //
+    // The classical V-W importance measure: area of the triangle
+    // formed by a point and its two neighbours. For a 1-D time
+    // series we treat (original_index, value) as 2-D coordinates,
+    // matching Visvalingam & Whyatt (Cartographic Journal, 1993).
+    //
+    //   Area = 0.5 * | t_p*(x_i - x_s) + t_i*(x_s - x_p)
+    //                                  + t_s*(x_p - x_i) |
+    //
+    // Scale note: area grows with the time span between neighbours,
+    // so V-W implicitly favours evicting points in temporally dense
+    // regions, whereas interpolation error is span-normalised.
+    // ========================================================
+    double compute_vw_area(int slot) const {
+        int p = nodes_[slot].prev;
+        int s = nodes_[slot].next;
+        if (p < 0 || s < 0)
+            return std::numeric_limits<double>::max();
+        double x_p = static_cast<double>(nodes_[p].value);
+        double x_i = static_cast<double>(nodes_[slot].value);
+        double x_s = static_cast<double>(nodes_[s].value);
+        double t_p = static_cast<double>(nodes_[p].original_index);
+        double t_i = static_cast<double>(nodes_[slot].original_index);
+        double t_s = static_cast<double>(nodes_[s].original_index);
+        // NUMERICAL CONDITIONING FIX:
+        // The textbook determinant form uses ABSOLUTE stream indices.
+        // With t ~ 1e3 and x ~ 1e-1 the three products are ~1e2 and
+        // cancel to a result ~1e-3 -- catastrophic cancellation costing
+        // ~10 significant digits. On quantised sensor data (MIT-BIH is
+        // quantised to 0.005) exact score ties are common, so the lost
+        // precision decides the argmin and the eviction trajectory
+        // diverges from an equivalent implementation.
+        //
+        // Algebraically, for a 1-D series,
+        //     area = 0.5 * (t_s - t_p) * |x_i - xhat_i|
+        // exactly. That form has no cancellation. Same criterion,
+        // stable evaluation. Verified against IMPORTANCE_INTERP_SPAN
+        // at beta=1 (bit-identical decisions).
+        double span = t_s - t_p;
+        if (span <= 0.0) return 0.0;
+        double t_frac = (t_i - t_p) / span;
+        double x_hat = x_p + t_frac * (x_s - x_p);
+        return 0.5 * span * std::abs(x_i - x_hat);
+    }
+    // ========================================================
     // Local frequency content estimator — O(W) per sample
     // ========================================================
     double compute_local_freq_weight(int slot) const {
@@ -472,6 +533,8 @@ private:
         return mode_ == BufferMode::IMPORTANCE_INTERP_ERROR ||
                mode_ == BufferMode::IMPORTANCE_INTERP_COMPOSITE ||
                mode_ == BufferMode::IMPORTANCE_INTERP_SPECTRAL ||
+               mode_ == BufferMode::IMPORTANCE_VW_AREA ||        // === V-W ADDITION ===
+               mode_ == BufferMode::IMPORTANCE_INTERP_SPAN ||        // === SPAN ADDITION ===
                mode_ == BufferMode::IMPORTANCE_INTERP_LOOKAHEAD;  // === LOOKAHEAD ADDITION ===
     }
 
@@ -565,6 +628,54 @@ private:
                 }
             }
             // === END LOOKAHEAD ADDITION ===
+            // === SPAN-WEIGHTED FAMILY ADDITION (S5) ===
+            else if (mode_ == BufferMode::IMPORTANCE_INTERP_SPAN) {
+                // score = ie * span^beta.
+                // beta=0 -> INTERP_ERROR, beta=1 -> VW_AREA (exact).
+                // Boundary nodes score +max, matching every other
+                // interp mode, so the fallback to head_ is unchanged.
+                double beta = imp_config_.span_beta;
+                while (cur >= 0 && cur != search_end) {
+                    int p = nodes_[cur].prev;
+                    int s = nodes_[cur].next;
+                    double score;
+                    if (p < 0 || s < 0) {
+                        score = std::numeric_limits<double>::max();
+                    } else {
+                        double ie = compute_interp_error(cur);
+                        double span = static_cast<double>(
+                            nodes_[s].original_index - nodes_[p].original_index);
+                        if (span <= 0.0) {
+                            score = ie;
+                        } else if (beta == 0.0) {
+                            score = ie;                    // exact, no pow()
+                        } else if (beta == 1.0) {
+                            score = ie * span;             // exact, no pow()
+                        } else {
+                            score = ie * std::pow(span, beta);
+                        }
+                    }
+                    if (score < min_score) {
+                        min_score = score;
+                        evict_slot = cur;
+                    }
+                    cur = nodes_[cur].next;
+                }
+            }
+            // === END SPAN ADDITION ===
+            else if (mode_ == BufferMode::IMPORTANCE_VW_AREA) {
+                // === V-W BASELINE ADDITION ===
+                // Classical Visvalingam-Whyatt: evict minimum triangle area
+                while (cur >= 0 && cur != search_end) {
+                    double area = compute_vw_area(cur);
+                    if (area < min_score) {
+                        min_score = area;
+                        evict_slot = cur;
+                    }
+                    cur = nodes_[cur].next;
+                }
+            }
+            // === END V-W ADDITION ===
             else if (mode_ == BufferMode::IMPORTANCE_INTERP_SPECTRAL) {
                 // Spectral-aware: ie × local_freq_weight — O(N·W)
                 while (cur >= 0 && cur != search_end) {

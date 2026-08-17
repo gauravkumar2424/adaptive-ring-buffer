@@ -9,3 +9,6 @@ __pycache__/
 *.pyc
 data/uci-har/
 data/**/*.zip
+src/verify_identity
+*.bak
+*.bak_*
